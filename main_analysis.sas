@@ -191,19 +191,19 @@ RUN;
 /* 2d. Cross-tabulations with statistical tests */
 TITLE "Step 2d: Chi-Square Test — Contract vs Churn";
 PROC FREQ DATA=churn_raw;
-    TABLES Contract * Churn / CHISQ EXPECTED CELLCHI2 CRAMERSV
+    TABLES Contract * Churn / CHISQ EXPECTED CELLCHI2 MEASURES
         PLOTS=FREQPLOT(TWOWAY=STACKED SCALE=GROUPPCT);
 RUN;
 
 TITLE "Step 2d: Chi-Square Test — Payment Method vs Churn";
 PROC FREQ DATA=churn_raw;
-    TABLES Payment_Method * Churn / CHISQ CRAMERSV
+    TABLES Payment_Method * Churn / CHISQ MEASURES
         PLOTS=FREQPLOT(TWOWAY=STACKED SCALE=GROUPPCT);
 RUN;
 
 TITLE "Step 2d: Chi-Square Test — Internet Service vs Churn";
 PROC FREQ DATA=churn_raw;
-    TABLES Internet_Service * Churn / CHISQ CRAMERSV
+    TABLES Internet_Service * Churn / CHISQ MEASURES
         PLOTS=FREQPLOT(TWOWAY=STACKED SCALE=GROUPPCT);
 RUN;
 
@@ -321,34 +321,34 @@ PROC SQL;
            CALCULATED Missing_Count / COUNT(*) AS Missing_Pct FORMAT=PERCENT8.1
     FROM churn_raw
     UNION ALL
-    SELECT 'Monthly_Charges',
-           SUM(CASE WHEN Monthly_Charges IS MISSING THEN 1 ELSE 0 END),
-           CALCULATED Missing_Count / COUNT(*) FORMAT=PERCENT8.1
+    SELECT 'Monthly_Charges' AS Variable,
+           SUM(CASE WHEN Monthly_Charges IS MISSING THEN 1 ELSE 0 END) AS Missing_Count,
+           CALCULATED Missing_Count / COUNT(*) AS Missing_Pct FORMAT=PERCENT8.1
     FROM churn_raw
     UNION ALL
-    SELECT 'Total_Charges',
-           SUM(CASE WHEN Total_Charges IS MISSING THEN 1 ELSE 0 END),
-           CALCULATED Missing_Count / COUNT(*) FORMAT=PERCENT8.1
+    SELECT 'Total_Charges' AS Variable,
+           SUM(CASE WHEN Total_Charges IS MISSING THEN 1 ELSE 0 END) AS Missing_Count,
+           CALCULATED Missing_Count / COUNT(*) AS Missing_Pct FORMAT=PERCENT8.1
     FROM churn_raw
     UNION ALL
-    SELECT 'Satisfaction_Score',
-           SUM(CASE WHEN Satisfaction_Score IS MISSING THEN 1 ELSE 0 END),
-           CALCULATED Missing_Count / COUNT(*) FORMAT=PERCENT8.1
+    SELECT 'Satisfaction_Score' AS Variable,
+           SUM(CASE WHEN Satisfaction_Score IS MISSING THEN 1 ELSE 0 END) AS Missing_Count,
+           CALCULATED Missing_Count / COUNT(*) AS Missing_Pct FORMAT=PERCENT8.1
     FROM churn_raw
     UNION ALL
-    SELECT 'Warehouse_To_Home_KM',
-           SUM(CASE WHEN Warehouse_To_Home_KM IS MISSING THEN 1 ELSE 0 END),
-           CALCULATED Missing_Count / COUNT(*) FORMAT=PERCENT8.1
+    SELECT 'Warehouse_To_Home_KM' AS Variable,
+           SUM(CASE WHEN Warehouse_To_Home_KM IS MISSING THEN 1 ELSE 0 END) AS Missing_Count,
+           CALCULATED Missing_Count / COUNT(*) AS Missing_Pct FORMAT=PERCENT8.1
     FROM churn_raw
     UNION ALL
-    SELECT 'Days_Since_Last_Order',
-           SUM(CASE WHEN Days_Since_Last_Order IS MISSING THEN 1 ELSE 0 END),
-           CALCULATED Missing_Count / COUNT(*) FORMAT=PERCENT8.1
+    SELECT 'Days_Since_Last_Order' AS Variable,
+           SUM(CASE WHEN Days_Since_Last_Order IS MISSING THEN 1 ELSE 0 END) AS Missing_Count,
+           CALCULATED Missing_Count / COUNT(*) AS Missing_Pct FORMAT=PERCENT8.1
     FROM churn_raw
     UNION ALL
-    SELECT 'Cashback_Amount',
-           SUM(CASE WHEN Cashback_Amount IS MISSING THEN 1 ELSE 0 END),
-           CALCULATED Missing_Count / COUNT(*) FORMAT=PERCENT8.1
+    SELECT 'Cashback_Amount' AS Variable,
+           SUM(CASE WHEN Cashback_Amount IS MISSING THEN 1 ELSE 0 END) AS Missing_Count,
+           CALCULATED Missing_Count / COUNT(*) AS Missing_Pct FORMAT=PERCENT8.1
     FROM churn_raw;
 QUIT;
 
@@ -371,13 +371,16 @@ DATA _null_;
     IQR_comp = Q3_comp - Q1_comp;
     IQR_tc = Q3_tc - Q1_tc;
     IQR_wh = Q3_wh - Q1_wh;
-    CALL SYMPUTX('upper_comp', Q3_comp + 1.5 * IQR_comp);
-    CALL SYMPUTX('upper_tc', Q3_tc + 1.5 * IQR_tc);
-    CALL SYMPUTX('upper_wh', Q3_wh + 1.5 * IQR_wh);
+    upper_comp_val = Q3_comp + 1.5 * IQR_comp;
+    upper_tc_val   = Q3_tc   + 1.5 * IQR_tc;
+    upper_wh_val   = Q3_wh   + 1.5 * IQR_wh;
+    CALL SYMPUTX('upper_comp', upper_comp_val);
+    CALL SYMPUTX('upper_tc',   upper_tc_val);
+    CALL SYMPUTX('upper_wh',   upper_wh_val);
     PUT "Outlier Thresholds:";
-    PUT "  Num_Complaints upper fence = " Q3_comp + 1.5 * IQR_comp;
-    PUT "  Total_Charges upper fence  = " Q3_tc + 1.5 * IQR_tc;
-    PUT "  Warehouse_KM upper fence   = " Q3_wh + 1.5 * IQR_wh;
+    PUT "  Num_Complaints upper fence = " upper_comp_val;
+    PUT "  Total_Charges upper fence  = " upper_tc_val;
+    PUT "  Warehouse_KM upper fence   = " upper_wh_val;
 RUN;
 
 /* Count outliers before capping */
@@ -740,8 +743,14 @@ PROC HPSPLIT DATA=churn_train PLOTS=ALL;
     GROW ENTROPY;
     PRUNE COSTCOMPLEXITY;
     OUTPUT OUT=train_scored_tree;
-    /* Score test data */
-    SCORE DATA=churn_test OUT=test_scored_tree;
+    /* Generate scoring code; we apply it to test data below */
+    CODE FILE="&project_path/tree_score.sas";
+RUN;
+
+/* Apply tree scoring code to test set */
+DATA test_scored_tree;
+    SET churn_test;
+    %INCLUDE "&project_path/tree_score.sas";
 RUN;
 
 /* Classify tree predictions */
@@ -800,14 +809,14 @@ PROC RANK DATA=test_scored_logistic OUT=_calib_ GROUPS=10;
     RANKS Decile;
 RUN;
 
-PROC MEANS DATA=_calib_ MEAN NOPRINT;
+PROC MEANS DATA=_calib_ MEAN NOPRINT NWAY;
     CLASS Decile;
     VAR P_1 Churn_Flag;
     OUTPUT OUT=_calib_summary_ MEAN(P_1)=Predicted_Avg MEAN(Churn_Flag)=Actual_Avg;
 RUN;
 
 TITLE "Visualization 13: Model Calibration — Predicted vs Actual Churn Rate";
-PROC SGPLOT DATA=_calib_summary_ (WHERE=(_TYPE_=1));
+PROC SGPLOT DATA=_calib_summary_;
     SERIES X=Predicted_Avg Y=Actual_Avg /
         MARKERS MARKERATTRS=(SYMBOL=CIRCLEFILLED SIZE=10 COLOR=CX4C78A8)
         LINEATTRS=(THICKNESS=2 COLOR=CX4C78A8);

@@ -5,6 +5,18 @@
 
 ---
 
+## Team Members
+
+| Name | ID |
+|------|----|
+| يوسف محمود مصطفى | 23011657 |
+| صالح كامل عوض كامل | 22010122 |
+| احمد مجدي احمد النجار | 2401241821 |
+| زياد مصطفي عيد داود | 22010105 |
+| زياد محمد عبدالمنعم محمد | 20221445711 |
+
+---
+
 ## Executive Summary
 
 Every month, roughly 1 in 3 customers on our e-commerce platform stops purchasing and never returns. This silent attrition — "churn" — represents a significant and growing revenue leak. This project transforms a raw dataset of 6,200 customers into an actionable churn prediction system using SAS, enabling the business to intervene *before* customers leave rather than react after the damage is done.
